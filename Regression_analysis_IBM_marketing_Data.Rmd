@@ -1,0 +1,148 @@
+---
+title: "Regression analysis"
+author: "H"
+date: "10/23/2021"
+output: html_document
+---
+
+```{r}
+df <- read.csv('Marketing_Analysis_IBM.csv', header = TRUE, sep = ",")
+```
+
+```{r}
+head(df, 10)
+```
+
+## Data analysis and visualization
+## Encode Response data as intringer
+```{r}
+df$Engaged <- ifelse(df$Response == "Yes", 1, 0)
+```
+```{r}
+head(df, 50)
+```
+
+## Engagement Rate 
+```{r}
+library(dplyr)
+```
+```{r} 
+EngagementRate <- df %>% group_by(Engaged) %>% summarise(Count =n()) %>% mutate(Percentage = Count/nrow(df)*100)
+```
+```{r}
+head(EngagementRate)
+```
+## Trabspose Data Frame
+```{r}
+transposed <- t(EngagementRate)
+colnames(transposed) <- EngagementRate$Engaged
+transposed <- transposed[-1,]
+```
+
+```{r}
+head(transposed)
+```
+###  14% of marketing calls were responsed and 85% of call were not responsed
+
+## Saes Channel 
+```{r}
+SalesChannel <- df %>% group_by(Engaged, Channel =Sales.Channel) %>% summarise(Count =n())
+```
+```{r}
+head(SalesChannel)
+```
+## Pie Chart 
+```{r}
+library(ggplot2)
+```
+```{r}
+ggplot(aes(x ="", y= Count, fill= Channel), data = SalesChannel) +geom_bar(width = 1, stat = "identity", position = position_fill()) +
+  geom_text(aes(x= 1.25, label =Count), position = position_fill(vjust= 0.5))+ coord_polar("y") +facet_wrap(~ Engaged)+ ggtitle('Sales Channel (0:Not Engaged, 1: Engaged)') + theme(axis.title.x = element_blank(), axis.title.y = element_blank(), plot.title = element_text(hjust = 0.5))
+```
+## Total Claim Amount
+```{r}
+ggplot(aes(x= "", y= Total.Claim.Amount), data = df) + geom_boxplot()+ facet_wrap(~Engaged) +ylab("Total Claim Amount") +xlab("0 :Not Engaged, 1:Engaged")+
+  ggtitle("Engaged vs.Not Engaged: Total Claim Amount") +theme(plot.title = element_text(hjust = 0.5))
+```
+## Remove outlier 
+```{r}
+ggplot(aes(x= "", y= Total.Claim.Amount), data = df) + geom_boxplot(outlier.shape = NA)+scale_y_continuous(limits = quantile(df$Total.Claim.Amount,c(0.1,0.9)))+ facet_wrap(~Engaged) +ylab("Total Claim Amount") +xlab("0 :Not Engaged, 1:Engaged")+
+  ggtitle("Engaged vs.Not Engaged: Total Claim Amount") +theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Regression Analysis 
+## Continuous Variables
+## Get data types of each column
+```{r}
+sapply(df,class)
+```
+## summary statistics per columns
+```{r}
+summary(df)
+```
+
+## get numeric colums 
+```{r}
+continuosDF <- select_if(df,is.numeric)
+```
+```{r}
+colnames(continuosDF)
+```
+##Fit regression model with continuos variables 
+```{r}
+logit.fit <- glm(Engaged ~ ., data = continuosDF, family = binomial)
+
+```
+```{r}
+summary(logit.fit)
+
+```
+## p-value is less than 0.05 cut off line, the lower value is the stronger relationship 
+## Income, Number.of.Policies,Total.Claim.Amount has 0.1 significant codes              
+## z value - Income and Total.Claim.Amount has positive correlation, the more income and total claim amount, the more likely to engage marketing calls
+## number of. policies has negative correaltion, the higher number of policies, the less engage marketing calls 
+
+## Categorical Variable 
+## a,. Education 
+## Fit regression model with education factor 
+```{r}
+logit.fit <- glm(Engaged ~ factor (Education),data= df, family = binomial)
+
+```
+
+```{r}
+summary(logit.fit)
+```
+## In this output there is no "Bachelor" category. It is included in Intercept 
+### Intercept coefficient is negative, customers who have  Bachelor  less likely to engage marketing calls
+### Doctor and Engaged has positive coefficent , higher educational customers , the more engage marketing calls
+
+## Education +gender
+### Fit regression model with education & Gender variable 
+```{r}
+logit.fit <-glm(Engaged ~factor(Education)+factor(Gender),family = binomial,data = df)
+```
+
+```{r}
+summary(logit.fit)
+```
+### In this case we can only see Gender M, it is because of Female with Bachelor degree are in Intercept data 
+
+## Combining Continuous and Categorical Variables 
+```{r}
+continuosDF$Gender <- factor(df$Gender)
+continuosDF$Education <- factor(df$Education)
+```
+```{r}
+colnames(continuosDF)
+```
+Fit regression model with Education & Gender variables 
+```{r}
+logit.fit <- glm(Engaged~ ., data = continuosDF, family = binomial)
+```
+
+```{r}
+summary(logit.fit)
+```
+### Total.Claim.Amount and EducationDoctor variables have  significant  at 0.05 significant level and both have positive coefficient with Engaged.
+### Income, Number.of.Policies ,  EducationMaster variable have significant relationships  at 0.1 significant level 
