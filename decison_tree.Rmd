@@ -1,0 +1,125 @@
+---
+title: "decisionTree"
+author: "H"
+date: "10/30/2021"
+output: html_document
+---
+
+
+# Decision Tree 
+## Conversion Rate : subscribe to a term deposit
+
+```{r}
+df <- read.csv('bank-additional-full.csv', header = TRUE, sep = ";")
+
+```
+# Encode conversion as 0s and 1s 
+```{r}
+df$conversion <- ifelse(df$y== "yes",1, 0)
+
+```
+```{r}
+head(df, 100)
+```
+```{r}
+
+```
+
+```{r}
+sprintf("Conversion Rate: %0.2f%%",sum(df$conversion)/nrow(df)*100)
+```
+
+```{r}
+library(dplyr)
+```
+## Conversion rate by job
+```{r}
+conversionsByJob <- df %>% group_by(Job = job) %>% summarise(Count= n(), numConversion = sum(conversion)) %>% 
+  mutate(ConversionRate = numConversion/Count *100.0)
+```
+```{r}
+head(conversionsByJob, 40)
+```
+
+## Horizontal bar chart 
+```{r}
+library(ggplot2)
+```
+```{r}
+ggplot( aes(x =Job, y= ConversionRate),data = conversionsByJob) +geom_bar(width = 0.5, stat = "identity") + coord_flip() + ggtitle("Conversiton Rate By Job") + xlab("Job")+ ylab("Conversion Rate (%)") +  theme(plot.title = element_text(hjust = 0.5))
+
+```
+### Student and Retired group have most highest conversion rate , Blue collar and service group have the lowest conversion rate 
+
+## Defalut rate by conversion 
+```{r}
+DefaultByConversion <- df %>% group_by(Default = default, Conversion= conversion) %>% summarise(Count =n())
+```
+```{r}
+head(DefaultByConversion, 10)
+```
+```{r}
+ ggplot( aes(x ="", y= Count, fill= Default) ,data = DefaultByConversion) +geom_bar(width = 1 , stat = 'identity', position = position_fill())+
+  coord_polar("y") +  facet_wrap(~Conversion)+ geom_text(aes(x = 1.25, label =Count), position = position_fill(vjust = 0.5)) +
+  ggtitle("Default (Non Conversions :0 , Conversions :1 )")
+
+```
+##Coversion Rate by number of contacts
+
+```{r}
+ConversionByNumContact <- df %>% group_by(Campaign = campaign) %>% summarise(Count = n(), NumConversion = sum (conversion)) %>% 
+  mutate(ConversionRate = NumConversion /Count *100)
+```
+
+```{r}
+head(ConversionByNumContact, 10)
+```
+## Bar chart Conversion Rate by number of contact 
+```{r}
+ggplot( aes(x = Campaign, y = ConversionRate), data = ConversionByNumContact)+geom_bar(width = 0.5, stat = "identity") +
+  ggtitle("Conversion Rate by Number of Contacts") +xlab("Number of Contacts") +ylab("Conversion Rate(%)") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+### there is outlier in this bar chart, however, overall we can see the higher contacts decrease conversion rate.
+
+## Encoding Categorical Variables
+### * Encode month 
+```{r}
+unique(df$month)
+```
+```{r}
+months =lapply(month.abb, function(x) tolower(x) )
+df$month <- match(df$month,months)
+```
+
+## First, in month.add is built in R for month name with capital letter. Use Function to convert lower case 
+## Then, use match function to convert the string value 
+
+```{r}
+df%>% group_by(month) %>% summarise(Count =n())
+```
+## Encoding the Job, Housing, Marital variables 
+```{r}
+df$job <- factor(df$job)
+df$housing <- factor(df$housing)
+df$marital <- factor(df$marital)
+```
+
+## Building Decision Trees 
+```{r}
+library(rpart)
+```
+```{r}
+fit <- rpart(
+  conversion ~ age +campaign + previous + housing + job +marital, method = "class", data =  df, control = rpart.control(maxdepth = 4, cp= 0.0001))
+)
+```
+### aforemnetioned variables as the feature conversion , classification model "method = class "
+```{r}
+library(rattle)
+```
+```{r}
+fancyRpartPlot(fit)
+```
+
