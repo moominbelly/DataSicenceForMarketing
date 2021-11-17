@@ -1,0 +1,175 @@
+---
+title: "Online_Retail"
+author: "H"
+date: "11/8/2021"
+output: html_document
+---
+
+```{r}
+library(readxl)
+```
+
+
+```{r}
+ df <- read_excel("OnlineRetail.xlsx")
+```
+
+```{r}
+head(df)
+```
+### Visualize distribution of Qunatity 
+```{r}
+library(ggplot2)
+```
+
+```{r}
+ggplot(df, aes(x= "", y =Quantity)) +geom_boxplot(outlier.shape = NA) +
+  ylim(c(-15, 25)) + ylab("order quantity") + xlab("") +ggtitle("Quantiity Distribution") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+### THere are negative order quantity, representing cancelled orders. 
+
+### Filter out orders with negative quantity (cancel order)
+```{r}
+df <- df[which(df$Quantity > 0), ]
+
+```
+### Time Series Trends
+```{r}
+library("lubridate")
+library(dplyr)
+```
+
+```{r}
+timeSeriesNumInvoices <- df %>% group_by(InvoiceDate = floor_date(InvoiceDate, "month")) %>% summarise(NumOrders= n_distinct(InvoiceNo))
+```
+```{r}
+head(timeSeriesNumInvoices, 10)
+```
+```{r}
+ggplot(aes(x =InvoiceDate, y =NumOrders), data = timeSeriesNumInvoices) + geom_line()+ ylim(c(0, max(timeSeriesNumInvoices$NumOrders)+ 1000))+
+  xlab("date") +ylab("number of orders") + ggtitle("Number of Order over Time ") + theme(plot.title = element_text(hjust = 0.5))
+```
+```{r}
+summary(df[which(df$InvoiceDate >= as.Date("2011-12-01")), "InvoiceDate"])
+```
+#### As we can see we only have Dec 2011 data from Dec 01 to Dec 09. This causes the drop of number of sales 
+### Disregard the Dec 2011 data 
+```{r}
+df <- df[which(df$InvoiceDate < as.Date("2011-12-01")), ]
+```
+
+```{r}
+
+ggplot(aes(x =InvoiceDate, y =NumOrders), data = timeSeriesNumInvoices) + geom_line()+ ylim(c(0, max(timeSeriesNumInvoices$NumOrders)+ 1000))+
+  xlab("date") +ylab("number of orders") + ggtitle("Number of Order over Time ") + theme(plot.title = element_text(hjust = 0.5))
+ 
+```
+### From Dec 2010 to Aug 2011, number of orders floated around 1500. From Sep 2011, number of orders increased and it went up twice higher. 
+### We can explain it as significant growth from Sep 2011.
+
+### Most E-commerce saels spike up from Oct to Dec. To see actual business growth, we can compare with previous year sales.
+
+### monthly number of sales 
+```{r}
+df$Sales <- df$Quantity * df$UnitPrice
+```
+
+```{r}
+timeSeriesRevenue <- df %>% group_by(InvoiceDate = floor_date(InvoiceDate, "month")) %>% summarise(Sales =sum(Sales))
+```
+```{r}
+head(timeSeriesRevenue)
+```
+```{r}
+ggplot(aes( x= InvoiceDate, y = Sales), data= timeSeriesRevenue ) + geom_line() + ylim(c(0, max(timeSeriesRevenue$Sales)+ 10000)) +
+  xlab("date") + ylab("sales") +ggtitle("Revenue over Time ") +theme(plot.title = element_text(hjust = 0.5))
+```
+#### Monthly revenue floats arouds 700000, and significantly increased from Sep 2011. 
+#### However, seasonal sales could affect sales, we need to look further of sales history.
+
+### Repeat Customers
+```{r}
+invoiceCustomerDF <- df%>% group_by(InvoiceNo, InvoiceDate) %>% summarise(CustomerID =max(CustomerID), Sales =sum(Sales))
+```
+
+
+```{r}
+head(invoiceCustomerDF)
+```
+#### aggregate data for each month and compute number of customers who made morethan one purchase in a given month 
+
+```{r}
+timeSeriseCustomerDF <- invoiceCustomerDF %>% group_by(CustomerID, InvoiceDate =floor_date(InvoiceDate, "month")) %>%
+  summarise(Count =n_distinct(InvoiceNo), Sales = sum(Sales))
+```
+
+```{r}
+head(timeSeriseCustomerDF)
+```
+### Filter out Customer ID who has Count = 1 
+
+```{r}
+repeatCustomer <- na.omit(timeSeriseCustomerDF[which(timeSeriseCustomerDF$Count >1), ])
+
+```
+```{r}
+timeSeriesRepatCustomer <- repeatCustomer %>% group_by(InvoiceDate) %>% summarise(Count= n_distinct(CustomerID), Sales= sum(Sales))
+```
+```{r}
+head(timeSeriesRepatCustomer)
+```
+
+```{r}
+timeSeriesUniqCustomer <- df %>% group_by(InvoiceDate = floor_date(InvoiceDate, "month")) %>% summarise(Count = n_distinct(CustomerID))
+```
+
+```{r}
+head(timeSeriesUniqCustomer)
+```
+### percentage of monthly revenue from repeated customers
+```{r}
+timeSeriesRepatCustomer$Perc <- timeSeriesRepatCustomer$Sales /timeSeriesRevenue$Sales* 100.0
+timeSeriesRepatCustomer$Total <- timeSeriesUniqCustomer$Count
+```
+
+```{r}
+head(timeSeriesRepatCustomer)
+```
+
+
+```{r}
+ggplot(timeSeriesRepatCustomer) +geom_line(aes(x= InvoiceDate, y= Total), stat = "identity", color= "navy")+ 
+  geom_line(aes(x= InvoiceDate, y= Count), stat = "identity", color ="orange")+ 
+  geom_bar(aes(x= InvoiceDate, y = Perc*20),stat = "identity", fill= "gray", alpha= 0.5) +
+  scale_y_continuous(sec.axis = sec_axis(~./20, name = "percentage (%)"))+ggtitle("Number of unique vs repeat & Revenue from Repeat Customers")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+#### line chart with navy color represents Total number of customer in month, line chart with orange color represents number of repeated customers
+#### Bar chart shows the percentage of revenue from repeated customers, secondary yaxis, Percentage (%) range from 1/20th of maximum of primary y axis, Total which matchs with scaling factor of 20. 
+#### Same as revenue monthly graph , it has increasing sales trends from Sep 2011. repeated customers are around 20-30% of total monthly customers.
+#### When you see the revenue, around 40-50% of sales revenues come from repated customers, meaning 20-30% of repeat customer drives half of sales revenue. 
+#### In conclusion, sales revenues come from the large part of repeated customers. In this case, it is important to keep the relationship with existing customers. As a marketer, it is important to focus on retain existing customers.
+
+### Trending items over time
+```{r}
+popularItems <- df %>% group_by(StockCode, InvoiceDate = floor_date(InvoiceDate, "month")) %>% summarise(Quantity =sum( Quantity))
+```
+```{r}
+head(popularItems)
+```
+
+### Top 5 best seller 
+```{r}
+Top5Items <- popularItems[which(popularItems$InvoiceDate == as.Date("2011-11-01")), ] %>% arrange(desc(Quantity)) %>% head(5)
+```
+```{r}
+timeSeriesTop5 <- popularItems[which(popularItems$StockCode %in% Top5Items$StockCode), ]
+```
+```{r}
+ggplot(aes(x= InvoiceDate, y= Quantity, color =StockCode), data =timeSeriesTop5) +geom_line()+ xlab("date")+ ylab("number of purchases") +
+  ggtitle("Top 5 Popular Items over Time") + theme(plot.title = element_text(hjust= 0.5))
+```
+#### most items  spike up in Sep 2011, especially 85099B got increadibly polpular.
+#### Marketer needs to look at the trends and see if there is certain trends in the market, and see if it is popular in cooler seasons too.
+#### Based on this, marketer can recommened the popluar item through marketing campaigns such as email marketing to improve customer engagement.
