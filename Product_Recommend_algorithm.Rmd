@@ -1,0 +1,151 @@
+---
+title: "Product Recommendation Algorithm"
+author: "H"
+date: "11/16/2021"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(readxl)
+```
+
+```{r}
+ df <- read_excel("OnlineRetail.xlsx")
+```
+
+```{r}
+head(df)
+```
+
+### Ignore canceled order
+```{r}
+df <- df[which(df$Quantity > 0), ]
+```
+### Data preparation 
+### Handling NA values in Customer ID 
+```{r}
+sum(is.na(df$CustomerID))
+```
+### **  Total 133361 NA value in Customer ID 
+```{r}
+head(df[which(is.na(df$CustomerID)),])
+```
+### Remove the records with NA value 
+```{r}
+df <- na.omit(df)
+```
+### building a customer- item matrix
+```{r}
+library(reshape2)
+```
+```{r}
+customerItemMatrix <- dcast(df, CustomerID ~ StockCode, value.var = "Quantity")
+```
+### Row represent customer ID, Colum represents Item 
+```{r}
+head(customerItemMatrix, 200)
+```
+### Encode purchase data 
+
+```{r}
+encode_fn <- function (x){as.integer (x> 0)}
+```
+```{r}
+customerItemMatrix <- customerItemMatrix %>% mutate_at(vars(-CustomerID), funs(encode_fn))
+```
+```{r}
+head(customerItemMatrix, 50)
+```
+### Collaborative Filtering
+```{r}
+install.packages("coop")
+```
+```{r}
+library(coop)
+```
+### User-based collaborative filtering and recommendations
+```{r}
+userToUserSimMatrix <- cosine(
+  as.matrix(
+    # Excluding CustomerID colums
+  t (customerItemMatrix[ , 2:dim(customerItemMatrix)[2]])
+  )
+  )
+```
+
+```{r}
+colnames(userToUserSimMatrix) <- customerItemMatrix$CustomerID
+```
+
+
+```{r}
+View(userToUserSimMatrix)
+```
+
+```{r}
+top10SimilarCustomersTo12350 <- customerItemMatrix$CustomerID[order(userToUserSimMatrix[ , "12350"],
+                                                                    decreasing = TRUE)[1: 11]]
+```
+
+```{r}
+top10SimilarCustomersTo12350
+
+```
+#### pick 17935 and see how we can recommend products 
+#### 1. Identify the item both customers 12350 and 17935 bought and find 12350 bought but 17935 has not purchased 
+
+```{r}
+itemBoughtByA <- customerItemMatrix[which(customerItemMatrix$CustomerID == "12350"),]
+itemBoughtByA <- colnames(customerItemMatrix)[which(itemBoughtByA != 0)]
+```
+
+```{r}
+itemBoughtByA
+```
+
+```{r}
+itemBoughtByB <- customerItemMatrix[which(customerItemMatrix$CustomerID == "17935"), ]
+itemBoughtByB <- colnames(customerItemMatrix)[which(itemBoughtByB != 0)]
+```
+
+```{r}
+itemBoughtByB
+```
+```{r}
+itemRecommendToB <- setdiff(itemBoughtByA, itemBoughtByB)
+itemRecommendToB
+```
+### Discription of the Itemss 
+```{r}
+itemToRecommendTBDescription <- unique(df [which(df$StockCode %in% itemRecommendToB),c("StockCode", "Description")])
+```
+```{r}
+itemToRecommendTBDescription <- itemToRecommendTBDescription[match(itemRecommendToB, itemToRecommendTBDescription$StockCode),]
+```
+```{r}
+itemToRecommendTBDescription
+```
+### Marketer can use these type of item with custom-tailor marketing message 
+### User based recommendation is limited to the customers who has enough data,  for new customer, we can recommend the item that the customer puchased. 
+
+### Item based collaborative filtering and recommendation 
+ 
+```{r}
+itemToItemSimMatrix <- cosine (as.matrix(customerItemMatrix[ , 2:dim(customerItemMatrix)[2]]))
+```
+### Purpose of item based collaborative filtering is to find the item which has simliarity 
+```{r}
+top10SimilarItemTo23166 <- colnames(itemToItemSimMatrix)[order(itemToItemSimMatrix[ , "23166"], decreasing = TRUE)[1: 11]]
+```
+```{r}
+top10SimilarItemTo23166
+```
+```{r}
+top10SimilarItemDescription <- unique(df[which(df$StockCode %in% top10SimilarItemTo23166), c("StockCode", "Description")])
+top10SimilarItemDescription <- top10SimilarItemDescription[match(top10SimilarItemTo23166, top10SimilarItemDescription$StockCode) ,]
+```
+```{r}
+top10SimilarItemDescription
+```
+### customers who purchased 23166 - medium ceramic top storage jar, frequently buy small or larger jar, jelly mould, cake tins, spice tin and coffee tin etc. Marketer can recommend the item based on this similarity items to the customers.
