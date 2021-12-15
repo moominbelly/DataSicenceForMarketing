@@ -1,0 +1,162 @@
+---
+title: "Exploratory_Analysis_For_Customer_behavior"
+author: "H"
+date: "11/30/2021"
+output: html_document
+---
+
+```{r}
+df <- read.csv('Marketing_Analysis_IBM.csv',header = TRUE)
+```
+
+```{r}
+head(df, 50)
+```
+### Encode response No, Yes to 0, 1
+```{r}
+df$Engaged <- ifelse(df$Response == "Yes", 1, 0)
+```
+```{r}
+head (df, 50)
+```
+
+```{r}
+library(dplyr)
+```
+### Overall engagement rate
+```{r}
+EngagementRate <- df %>% group_by(Response = Response) %>% summarise(Count =n()) %>% mutate(EngagementRate = Count/nrow(df) *100)
+```
+```{r}
+EngagementRate
+```
+```{r}
+library(ggplot2)
+```
+```{r}
+ggplot(data = EngagementRate, aes(x= Response, y= EngagementRate)) + geom_bar(width = 0.5, stat = "identity", fill = 'blue') +
+  ggtitle("Engagement Rate")+ xlab("Engaged") + ylab("Percentage(%)") +theme(plot.title = element_text(hjust = 0.5))
+```
+### only 14 % customer responded to marketing calls, majority customers didnt response to marketing calls
+### Next, we will see the customers who responded to marketing call
+
+###Engagement rate by offer type 
+```{r}
+engagementRateByOfferType <- df %>% group_by(Renew.Offer.Type) %>% summarise (Count =n(), NumEngaged = sum(Engaged)) %>% mutate(EngagementRate = NumEngaged/Count *100 ) 
+```
+
+```{r}
+engagementRateByOfferType
+```
+### Visualize with Bar Plot 
+```{r}
+ggplot(data = engagementRateByOfferType, aes(x=Renew.Offer.Type, y= EngagementRate)) +geom_bar(width = 0.5, stat = "identity", fill = "orange")+ ggtitle("Engagement Rates by Offer Type") + xlab("Offer Type") +ylab("Engagement Rate(%)") +theme(plot.title = element_text(hjust = 0.5))
+```
+###Engagement Rate by Offer Type and Vehicle Class
+```{r}
+engagementRateByOfferTypeAndVehicleClass <- df %>% group_by(Renew.Offer.Type, Vehicle.Class) %>% summarise(NumEngaged = sum(Engaged)) %>% left_join(engagementRateByOfferType[, c("Renew.Offer.Type", "Count")], by ="Renew.Offer.Type") %>% mutate(EngagementRate = NumEngaged/Count *100)
+
+```
+```{r}
+engagementRateByOfferTypeAndVehicleClass
+```
+```{r}
+ggplot(data= engagementRateByOfferTypeAndVehicleClass, aes(x= Renew.Offer.Type, y =EngagementRate, fill= Vehicle.Class)
+) +geom_bar(width = 0.5, stat = "identity", position = "dodge") + ggtitle("Engagement Rates by Offer Type & Vehicle Class") +xlab("Offer Type")+ ylab("Engagement Rate (%)") +theme(plot.title = element_text(hjust = 0.5))
+```
+
+#### We can see Offer 2 has highest response rate,Four Door Class has highest response rate among the vehicle class.
+### SUV was the second highest response rate in offer one, but Two Door Car was the seecond highest response rate in offer2 and 3.
+### We can target the customers who owns SUV with offer 1, and customers who own Two door car with offer 2. 
+
+### Conversion rate by sales channel 
+```{r}
+engagementRateBySalesChannel <- df %>% group_by(Sales.Channel) %>% summarise(Count =n(), 
+                                                                             NumEngaged= sum(Engaged)) %>% mutate(EngagementRate = NumEngaged /Count * 100.00) 
+```
+```{r}
+engagementRateBySalesChannel
+```
+```{r}
+ggplot( data =  engagementRateBySalesChannel, aes(x= Sales.Channel, y= EngagementRate )) +
+  geom_bar(width = 0.5, stat = "identity", fill = "purple")+ xlab("Sales Channel") +ylab("Engagement Rate (%)") + ggtitle("Engagement Rates by Sales Channel") + theme(plot.title= element_text(hjust = 0.5))
+```
+
+#### Response rate by Agent has highest engagement rate among the sales channel, Web is the second best channel.
+
+#### Engagement Rate by Sales Channel and Vehicle Size.
+```{r}
+engagementRateBySalesChannelVehiclesize <- df %>% group_by(Sales.Channel, Vehicle.Size) %>%
+  summarize(NumEngaged = sum(Engaged)) %>% left_join(engagementRateBySalesChannel[, c("Sales.Channel","Count")],
+                                                     by = "Sales.Channel") %>% 
+  mutate(EngagementRate = NumEngaged/Count * 100)
+```
+```{r}
+engagementRateBySalesChannelVehiclesize
+```
+
+```{r}
+ggplot(data = engagementRateBySalesChannelVehiclesize, aes(x= Sales.Channel, y= EngagementRate, fill= Vehicle.Size)) + 
+  geom_bar(width = 0.5, stat = "identity", position = "dodge") + ggtitle("Engagement Rate by Sales Channel") +
+  xlab("Sales Channel") + ylab("Engagement Rate (%)") + theme(plot.title = element_text(hjust=0.5))
+```
+### Medsize car owners has highest response rate to all sales channel. 
+### samll to medsize car onwers has highest response rate in call center and Agent, Large car owners responsed more on web and branch channel. 
+### For small car, marketers can use Agent and call center for sales channel more. 
+
+## Customer Life Time Value 
+## if customer life time value is larger than median, define as high CLV customer, if it is lower than median, define as Low CLV customer.
+```{r}
+summary(df$Customer.Lifetime.Value)
+```
+```{r}
+clv_encode_fn <- function(x){if (x > median(df$Customer.Lifetime.Value)) "High" else "Low"}
+```
+
+```{r}
+df$CLV.segment <- sapply(df$Customer.Lifetime.Value, clv_encode_fn)
+```
+```{r}
+summary(df$Months.Since.Policy.Inception)
+```
+```{r}
+policy_age_encode_fn <- function(x){if (x > median(df$Months.Since.Policy.Inception)) "High" else "Low"}
+
+```
+```{r}
+df$policy.age.segment <- sapply(df$Months.Since.Policy.Inception, policy_age_encode_fn)
+
+```
+```{r}
+summary(df$policy.age.segment)
+```
+
+```{r}
+head(df$CLV.segment)
+```
+```{r}
+ggplot(data = df[which(df$CLV.segment == "High" & df$policy.age.segment == "High"), ], 
+       aes(x =Months.Since.Policy.Inception, y =log(Customer.Lifetime.Value)))+ 
+  geom_point(color = "red") +
+  geom_point(data = df[which(df$CLV.segment == "High" & df$policy.age.segment == "Low"),],color = "orange")+
+  geom_point(data = df[which(df$CLV.segment == "Low" & df$policy.age.segment == "Low"),],color = "green") +
+    geom_point(data = df[which(df$CLV.segment == "Low" & df$policy.age.segment == "High"),],color = "blue") +
+  ggtitle("Segments by CLV and Policy Age")+ xlab("Months Since Policy Inception") + ylab("CLV (in log scale)")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+```{r}
+engagementRatebySegment <- df %>% group_by(CLV.segment, policy.age.segment) %>% summarise(Count =n(),
+                                                                                          NumEngaged = sum(Engaged))%>% mutate( EngagementRate = NumEngaged / Count * 100 )
+```
+```{r}
+engagementRatebySegment
+```
+```{r}
+ggplot(data = engagementRatebySegment, aes(x =CLV.segment, y= EngagementRate, fill = policy.age.segment)) +
+  geom_bar(width = 0.5, stat = "identity", position ="dodge") +xlab("CLV.Segment") +
+  ylab("Engagement Rate (%)") +ggtitle("Engagement Rate by Customer Segments") + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+###  Low CLV Segment and high policy.age.segment has higest engagement rate. Overall, low CLv segment has higher engagement rate, and high policy.age.segment has higher engagement rate, meaning customer who has been insured by this company longer responds better. 
