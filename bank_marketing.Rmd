@@ -149,3 +149,20 @@ ggplot(conversionByAgeandMarital,aes(x =AgeGroup, y= ConversionRate, Fill= Marit
   ggtitle("Conversion Rate by Age and Marital Status")+ theme(plot.title = element_text(hjust = 0.5))
 ```
 
+contact       
+```{r}
+ConversionRateByContact <- conversionDF %>% group_by(AgeGroup = cut(age, breaks =  seq(20, 70, by =10)), contact) %>% summarise(Count = n(), NumConversions = sum(conversion)) %>% 
+ mutate(ConversionRate = NumConversions/Count)
+```
+```{r}
+ConversionRateByContact
+ConversionRateByContact$AgeGroup <- as.character(ConversionRateByContact$AgeGroup)
+
+ConversionRateByContact$AgeGroup[is.na(ConversionRateByContact$AgeGroup)] <- "70+"
+```
+```{r}
+ggplot(aes(x =AgeGroup, y= ConversionRate),data = ConversionRateByContact) +
+  geom_bar(width = 0.5, stat= "identity", aes(fill = contact)) + scale_fill_manual(values = wes_palette(name ="GrandBudapest1", n= 2)) +xlab("AgeGroup") + ylab("Conversion Rate (%)") + ggtitle("Coversion Rate by Contact") + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
