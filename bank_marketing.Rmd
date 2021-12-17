@@ -14,6 +14,7 @@ conversionDF <- read.csv('bank-additional-full.csv', header = TRUE, sep = ";")
 # Encode conversion as 0s and 1s 
 # Output variable y = has information on whether a client has subscribed to a term deposit, encoded 'yes' or 'no'
 ```{r}
+
 conversionDF$conversion <- ifelse(conversionDF$y== "yes",1, 0)
 
 ```
@@ -75,10 +76,15 @@ conversionsByAgeGroup$AgeGroup <- as.character(conversionsByAgeGroup$AgeGroup)
 conversionsByAgeGroup$AgeGroup[6] <- "70+"
 ```
 
+```{r}
+library(wesanderson)
+names(wes_palettes)
+```
 
 # Bar Chart 
 ```{r}
-ggplot(aes(x= AgeGroup, y = conversionRate), data = conversionsByAgeGroup) + geom_bar(width = 0.5, stat = 'identity')+ ggtitle('Conversion By AgeGroup') + xlab("Age") +ylab("ConversionRate {%}") + theme(plot.title = element_text(hjust = 0.5))
+ggplot(aes(x= AgeGroup, y = conversionRate), data = conversionsByAgeGroup) + 
+  geom_bar(width = 0.5, stat = 'identity',   fill =(values=wes_palette(n=6, name="BottleRocket1")))+ ggtitle('Conversion By AgeGroup') + xlab("Age") +ylab("ConversionRate {%}") + theme(plot.title = element_text(hjust = 0.5))
 ```
 # Conversions vs non-conversions
 ```{r}
@@ -126,16 +132,18 @@ head(conversionByAgeandMarital, 60)
 ```
 
 ## Bar chart
+
 ```{r}
-ggplot(aes(x= AgeGroup, y= ConversionRate, Fill =Marital), data = conversionByAgeandMarital) +geom_bar(width =  0.5, stat = "identity",
-                                                                                                       position = "dodge")+
-  ylab("Conversion Rate (%)") +
+ggplot(aes(x = AgeGroup, y =ConversionRate), data = conversionByAgeandMarital) +geom_bar(aes(fill =Marital), stat = "identity", position = "dodge")+  scale_fill_manual(values = wes_palette(name ="Darjeeling2", n= 4)) +ylab("Conversion Rate (%)") +
   xlab("Age")+
   ggtitle("Conversion Rate by Age and Marital Status")+ theme(plot.title = element_text(hjust = 0.5))
 ```
+
+
+
 ## Staced Bar Chart 
 ```{r}
-ggplot(conversionByAgeandMarital,aes(x =AgeGroup, y= ConversionRate, Fill= Marital)) +geom_bar(aes(fill = Marital), stat = "identity")+
+ggplot(conversionByAgeandMarital,aes(x =AgeGroup, y= ConversionRate, Fill= Marital)) +geom_bar(aes(fill = Marital), stat = "identity")+ scale_fill_manual(values = wes_palette(name ="Darjeeling1", n= 4))+
   ylab("Conversion Rate (%)") +
   xlab("Age")+
   ggtitle("Conversion Rate by Age and Marital Status")+ theme(plot.title = element_text(hjust = 0.5))
