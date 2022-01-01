@@ -1,0 +1,136 @@
+---
+title: "Clustering_segmenting_Customer"
+author: "H"
+date: "12/27/2021"
+output: html_document
+---
+```{r}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(wesanderson)
+
+data <- read_xlsx("OnlineRetail.xlsx")
+
+```
+
+### 1. Clean data 
+#### Clean canceled data which Quantity = 0 
+```{r}
+data <- data[which(data$Quantity > 0), ]
+
+```
+#### Clean NA data
+
+```{r}
+data <- na.omit(data)
+
+```
+### Incomplete data 
+```{r}
+summary(data$InvoiceDate)
+```
+### This dataset is from 12/01/10 to 12/09/11. There are missing data in December in 2011. So Clean the December 2011 data. 
+```{r}
+data <- data[which(data$InvoiceDate < "2011-12-01"), ]
+summary(data$InvoiceDate)
+```
+### Add sales revenue on dataset. 
+```{r}
+data$sales <- data$Quantity * data$UnitPrice
+```
+```{r}
+data
+```
+### Per -order customer data
+```{r}
+customerDF <- data %>% group_by(CustomerID) %>% 
+  summarise(TotalSales = sum(sales), Ordercount = length(unique(InvoiceDate))) %>% mutate(AVGOrderValue = TotalSales/Ordercount)
+customerDF
+```
+### normalize the data. (clustering is highly affected by scale / order count and total sales has different scale )
+```{r}
+rankDF <- customerDF %>% mutate(TotalSales =rank(TotalSales), Ordercount =rank(Ordercount, ties.method = "first"), AVGOrderValue =rank(AVGOrderValue))
+rankDF
+```
+
+```{r}
+normalizedDF <- rankDF %>% mutate(TotalSales = scale(TotalSales), Ordercount =scale(Ordercount), AVGOrderValue =scale(AVGOrderValue) )
+```
+```{r}
+summary(normalizedDF)
+```
+### K- mean clustering 
+```{r}
+cluster <- kmeans(normalizedDF[c("TotalSales", "Ordercount", "AVGOrderValue" )], 4)
+```
+
+```{r}
+cluster$cluster
+cluster$centers
+```
+### Cluster label
+```{r}
+normalizedDF$cluster <- cluster$cluster
+```
+
+### Visualized 
+```{r}
+ggplot(data =normalizedDF, aes(x= AVGOrderValue, y= Ordercount, color =cluster)) +geom_point() + scale_color_manual(values=wes_palette(n=4, name="Moonrise1"))
+```
+```{r}
+str(normalizedDF$cluster)
+normalizedDF$cluster <- as.factor(normalizedDF$cluster)
+```
+
+
+```{r}
+ggplot(data =normalizedDF, aes(x= TotalSales, y= Ordercount, color =cluster)) +geom_point() +scale_color_manual(values=wes_palette(n=4, name="Darjeeling2"))
+
+```
+### ligher color represents customers cluster who have less frequency of purchase and lower value , darker color represents clusters who purchase frequently 
+
+```{r}
+ggplot(data =normalizedDF, aes(x= TotalSales, y= AVGOrderValue, color =cluster)) +geom_point() +scale_color_manual(values=wes_palette(n=4, name="Darjeeling2"))
+```
+
+### Also , light blue represent lowest average order value per sales and dark blue represent highest average order value per sales.
+
+### selecting the best order number of cluster
+```{r}
+library(cluster)
+```
+```{r}
+for (n_cluster in 4:8) {
+  cluster <- kmeans(normalizedDF[c("TotalSales", "Ordercount", "AVGOrderValue")], n_cluster)
+  silhouettescore <- mean(silhouette(cluster$cluster,dist(normalizedDF[c("TotalSales", "Ordercount", "AVGOrderValue")],
+                                                          method = "euclidean"))[, 3])
+  print(sprintf("Silhouette Score for %i Clusters:%0.4f", n_cluster, silhouettescore))
+}
+```
+### we can meaure the silhouette score and select highest score to interpret. Silhouette score for 4 clusters is highest, 0.4118
+
+### Interpreting customer segment 
+```{r}
+cluster <- kmeans(normalizedDF[c("TotalSales", "Ordercount", "AVGOrderValue")], 4)
+normalizedDF$cluster <- cluster$cluster
+```
+```{r}
+normalizedDF
+```
+```{r}
+cluster$centers
+```
+
+### As we can see, forth cluster has lowest attributes and first cluster has higest attribution, meaning highest purchase, highest average per order value . Marketer should concentrate on first clusters to maximizae marketing ROI .Second cluster indicates that thier purchase freqency is relatively high, but average per order value is low. In this cluster, customer would like to buy low valued item often, marketer should plan for marketing campaigs with lower value item. Third cluster represents customer segment who would like to buy less frequently but higher value. For this cluster, marketers can recommened expensive item to this customer segment. 
+
+### High value cluster 
+
+```{r}
+highValueCustomer <- unlist(customerDF[which(normalizedDF$cluster == 1 ), 'CustomerID'][ ,1], use.names= FALSE)
+```
+```{r}
+data[which(data$CustomerID %in% highValueCustomer), ] %>% group_by(Description) %>% summarise(Count =n()) %>% arrange(desc(Count))
+```
+### For the higest value cluster, we can see " Jumbo Bag Red Retrospot" and REgency Cakestand 3 Tier are the top selling item. For marketing campaign, it should recommend similar items with them for this customer segment. 
+
