@@ -1,0 +1,215 @@
+---
+title: "customer lifetime value"
+author: "H"
+date: "12/21/2021"
+output: html_document
+---
+
+```{r}
+
+library(readxl)
+
+clvdata <- read_xlsx("OnlineRetail.xlsx")
+
+clvdata
+is.na(clvdata)
+```
+
+```{r}
+
+str(clvdata)
+```
+
+### 1. Clean data 
+#### Clean canceled data which Quantity = 0 
+```{r}
+clvdata <- clvdata[which(clvdata$Quantity > 0), ]
+
+```
+#### Clean NA data
+
+```{r}
+clvdata <- na.omit(clvdata)
+clvdata
+```
+### Incomplete data 
+```{r}
+summary(clvdata$InvoiceDate)
+```
+### This dataset is from 12/01/10 to 12/09/11. There are missing data in December in 2011. So Clean the December 2011 data. 
+```{r}
+clvdata <- clvdata[which(clvdata$InvoiceDate < "2011-12-01"), ]
+summary(clvdata$InvoiceDate)
+```
+### Add sales revenue on dataset. 
+```{r}
+clvdata$sales <- clvdata$Quantity * clvdata$UnitPrice
+
+summary(clvdata$sales)
+```
+### Aggregate order data 
+```{r}
+library(dplyr)
+library(ggplot2)
+library(wesanderson)
+
+
+```
+
+```{r}
+orderdata <- clvdata %>% group_by(CustomerID, InvoiceNo) %>% summarise(Sales = sum(sales), InvoiceDate =max(InvoiceDate))
+orderdata
+```
+### Data Analysis 
+### Compute Frequency, recency, total amount of purchase by customer 
+```{r}
+frequencydata <- orderdata %>% group_by(CustomerID) %>% summarise(Salesmin = min(Sales), Salesmax= max(Sales), Salessum = sum(Sales),
+                                                                  SalesAvg =mean(Sales), SalesCount = n(), InvoiceDateMin =min(InvoiceDate),
+                                                                  InvoiceDateMax =max(InvoiceDate), PurchaseDuration =as.double(floor(max(InvoiceDate)- min(InvoiceDate))), PurchaseFrequency = as.double(floor(max(InvoiceDate)- min(InvoiceDate)))/n())
+frequencydata
+```
+```{r}
+summary(frequencydata)
+```
+#### Average purchase duration is 125.2 days, purchase Frequency is around 125.2 and Average of  sales amount is 1952.8 
+#### now aggregate repeated customer. 
+```{r}
+frequencydata <- frequencydata[which(frequencydata$PurchaseDuration > 0), ]
+frequencydata
+```
+### see how many sales counts the customer made during the time (distribuyion of number of purchase )
+```{r}
+repeatedCustomer <-  frequencydata %>% group_by(SalesCount) %>% summarise(Count =n())
+repeatedCustomer
+```
+```{r}
+ggplot(aes(x =SalesCount, y =Count), data =repeatedCustomer) +geom_bar(width = 0.5, stat = "identity") + xlim(c(1, 20)) +xlab("Sales Count") +
+  ylab("Count") 
+```
+### Most customner make purchase around 2-5 times 
+### now let's see the frequency
+
+```{r}
+ggplot(aes(x = PurchaseFrequency), data = frequencydata )+ geom_histogram(binwidth = 10, fill = "blue") +  xlim(c(0,200)) + xlab ( "avg number of days between purchase")  + ylab ("count")
+hist(frequencydata$PurchaseFrequency, breaks = 20, xlab = "avg number of days between purchase", ylab = "count", main ="")
+```
+### Predicting 3 month CLV
+### group the data into every 3 month to build target variables and features. 
+```{r}
+library(lubridate)
+library(reshape2)
+```
+```{r}
+orderdata$quarter = as.character(round_date(orderdata$InvoiceDate,"3month"))
+ThreemonthCLv <- orderdata %>% group_by(CustomerID, quarter) %>% summarise(SalesSum =sum(Sales), AvgSales = mean(Sales), SalesCount =n())
+```
+```{r}
+ThreemonthCLv
+```
+### Simplify the quarter data, smaller number is the recent data. 
+```{r}
+ThreemonthCLv$quarter[ThreemonthCLv$quarter == "2012-01-01"] <- "Q1"
+ThreemonthCLv$quarter[ThreemonthCLv$quarter == "2011-10-01"] <- "Q2"
+ThreemonthCLv$quarter[ThreemonthCLv$quarter == "2011-07-01"] <- "Q3"
+ThreemonthCLv$quarter[ThreemonthCLv$quarter == "2011-04-01"] <- "Q4"
+ThreemonthCLv$quarter[ThreemonthCLv$quarter == "2011-01-01"] <- "Q5"
+```
+```{r}
+ThreemonthCLv
+```
+### Before building machine learning model, dataset need to be transformed into  table  
+#### Build feature data frame. 
+
+```{r}
+salessumfeature <- dcast(ThreemonthCLv[which(ThreemonthCLv$quarter != "Q1"), ], CustomerID ~ quarter, value.var = "SalesSum")
+colnames(salessumfeature) <- c("CustomerID", "SalesSum.Q2", "SalesSum.Q3", "SalesSum.Q4", "SalesSum.Q5")
+```
+```{r}
+salesAvgFeature <- dcast(ThreemonthCLv[which(ThreemonthCLv$quarter != "Q1"), ], CustomerID ~ quarter, value.var = "AvgSales")
+colnames(salesAvgFeature) <- c("CustomerID", "SalesAvg.Q2", "SalesAvg.Q3", "SalesAvg.Q4", "SalesAvg.Q5")
+```
+```{r}
+salesCountFeature <- dcast(ThreemonthCLv[which(ThreemonthCLv$quarter != "Q1"), ], CustomerID ~ quarter, value.var = "SalesCount")
+colnames(salesCountFeature) <- c("CustomerID", "SalesCount.Q2", "SalesCount.Q3", "SalesCount.Q4", "SalesCount.Q5")
+```
+```{r}
+featuremerged <- merge(merge(salessumfeature,salesAvgFeature, by ="CustomerID"), salesCountFeature, by ="CustomerID" )
+featuremerged[is.na(featuremerged)] <- 0
+featuremerged
+```
+### build target variables 
+```{r}
+targetdata <- ThreemonthCLv[which(ThreemonthCLv$quarter == "Q1"), ] %>% select(CustomerID, SalesSum)
+
+colnames(targetdata) <- c("CustomerID", "CLV_3_month")
+targetdata
+```
+
+```{r}
+Sampledata <- merge(featuremerged,targetdata, by = "CustomerID", all.x= TRUE)
+Sampledata[is.na(Sampledata)] <- 0
+Sampledata
+```
+### Linear regression 
+### split the sample set into train and test sets 
+
+```{r}
+library(caTools)
+```
+```{r}
+sample <- sample.split(Sampledata$CustomerID, SplitRatio = .8)
+train <- as.data.frame(subset(Sampledata, sample == TRUE))[, -1]
+test <- as.data.frame(subset(Sampledata, sample == FALSE))[, -1]
+```
+### Devided 80% of train data and 20% of test data 
+
+### Linear regression model 
+```{r}
+regFit <- lm(CLV_3_month ~., data = train)
+summary(regFit)
+options(scipen = 100)
+
+```
+### we can see the correlation with the target. Sales SumQ2 has highest positive impacts on CLV 3month. On the other hand, Sales sum Q3 has negavtive impacts on CLV values. It means customers who purchased within 2 quarters and 4 quarters ago, would like to purchase again in next 3months. Based on this CLV, marketer can allocate marketing budget to the high valued customers who purchased in 2 and 4 quarters ago. 
+
+### Evaluating regression model performance. 
+```{r}
+train_preds <- predict(regFit, train)
+test_preds <- predict(regFit, test)
+```
+### Evaluating with R sqaure value 
+```{r}
+library(miscTools)
+```
+```{r}
+inSampleR <- rSquared(train$CLV_3_month, resid = train$CLV_3_month - train_preds)
+outOfsampleR <- rSquared(test$CLV_3_month, resid = test$CLV_3_month -test_preds)
+
+sprintf("In-Sample R-Squared: %0.4f", inSampleR)
+```
+
+```{r}
+sprintf("Out- of-sample R-Squared: %0.4f", outOfsampleR)
+
+```
+#### If there is larger gap between out and in sample , there is some overfitting happening. It seems like in and out sample has lower gap. 
+
+### Median Absolute Error (MAE)
+```{r}
+insampleMAE <- median(abs(train$CLV_3_month -train_preds))
+outofSampleMAE <- median(abs(test$CLV_3_month -test_preds))
+```
+```{r}
+sprintf("In-Sample MAE: %0.4f", insampleMAE)
+
+```
+```{r}
+sprintf("Out- of-sample MAE: %0.4f", outofSampleMAE)
+
+```
+### Scatter plot 
+```{r}
+plot(test$CLV_3_month, test_preds, xlab ="Actual", ylab= "predicted", main = "out -of Sample Actual vs. Predicted")
+abline(a =0, b= 1)
+```
+#### the more the points are on the straight line , the better the predictions are. This model doesn't spread to the straight line , meaning prediction are poor .
