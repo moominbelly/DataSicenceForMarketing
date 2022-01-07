@@ -1,0 +1,148 @@
+---
+title: "A/Btesting for Marketing"
+author: "H"
+date: "1/6/2022"
+output: html_document
+---
+
+
+```{r}
+FastF <- read.csv("WA_Marketing-Campaign.csv")
+```
+```{r}
+FastF
+```
+#### Descripion 
+#### MarketId  = unique identifier for market , 
+#### Marketsize - size of market area by sales , 
+#### LocationId - unique identifier for store location, 
+#### AgeofStore - age of store in years, 
+#### Promotion - one of three promotions that was tested. 
+#### Week - One of four weeks when the promotions were run , 
+#### Sales in Thousand : sales amount for a specific Location Id, Promotion, week. 
+
+### Data analysis 
+### See the distribution of promotion by sales, market size, store location, store ages 
+```{r}
+library(dplyr)
+library(ggplot2)
+library(wesanderson)
+```
+
+```{r}
+names(wes_palettes)
+```
+
+
+```{r}
+salesperpromo <- FastF %>% group_by(Promotion = as.factor(Promotion)) %>% summarise(sales = sum(SalesInThousands))
+```
+
+
+```{r}
+ggplot(aes(x= " ", y= sales, fill = Promotion), data = salesperpromo) +geom_bar(width = 1, stat = "identity", position = position_fill()) +scale_fill_manual(values=wes_palette(n=3, name="Moonrise3")) +geom_text(aes(x= 1.25, label = sales), position = position_fill(vjust= 0.5), color = 'white') +coord_polar("y") +ggtitle("Sales distribution across different promotion")
+
+```
+### each promotion takes almost 1/3 roughly, so it is hard to tell which promotion has the largest sales. 
+
+```{r}
+Marketsizeperpromo <- FastF %>% group_by(Promotion = as.factor(Promotion), MarketSize) %>% summarise(Count =n())
+```
+```{r}
+Marketsizeperpromo 
+```
+
+```{r}
+ggplot(aes(x= Promotion, y= Count, fill = MarketSize), data =Marketsizeperpromo ) +geom_bar(width = 0.5, stat = "identity") + scale_fill_manual(values=wes_palette(n=3, name="Royal2"))+ ggtitle("Breakdown of market size across different promotion")
+```
+#### We can see medium Market size take the largest portion of each promotion. On the other hand, Small market size is the least portion of promotion.
+```{r}
+StoreAgePromo <- FastF %>% group_by(AgeOfStore, Promotion = as.factor(Promotion)) %>% summarise(Count = n())
+
+```
+```{r}
+ggplot(aes(x= AgeOfStore, y =Count), data =StoreAgePromo )+geom_bar(width = 0.5, stat = "identity", fill = "blue") + xlab("Store Age")+ ggtitle( "Overall distribution of age of store")
+```
+### as we can see majorities of store is 0- 10 years old. Let's see promotion distribution by store age.
+
+
+
+```{r}
+ggplot(aes(x= AgeOfStore, y =Count, fill = Promotion), data =StoreAgePromo )+geom_bar(width = 0.5, stat = "identity", position = "stack") + scale_fill_manual(values=wes_palette(n=3, name="Zissou1")) +xlab("Store Age")+ ggtitle( "distribution of age of store")
+```
+### we can see Promotion 2 and 3 take higher portion, however it is hard to tell. 
+```{r}
+tapply(FastF$AgeOfStore, FastF$Promotion, summary)
+```
+
+### average age of store of each promotion group is 8-9 years old, 
+
+### Statistial Hypothesis testing
+
+#### 1. computing t-value and p-value from the equations 
+```{r}
+promo1 <- FastF[which(FastF$Promotion == 1),]$SalesInThousands
+promo2 <- FastF[which(FastF$Promotion == 2),]$SalesInThousands
+promo3 <- FastF[which(FastF$Promotion == 3),]$SalesInThousands
+```
+```{r}
+mean_1 <- mean(promo1)
+mean_2 <- mean(promo2)
+mean_3 <- mean(promo3)
+std_1 <- sd(promo1)
+std_2 <- sd(promo2)
+std_3 <- sd(promo3)
+N_1 <- length(promo1)
+N_2 <- length(promo2)
+N_3 <- length(promo3)
+```
+
+```{r}
+t_val <-(
+  mean_1 -mean_2
+)/sqrt(std_1**2/N_1 + std_2 **2 /N_2)
+```
+```{r}
+t_val
+```
+```{r}
+df_1_2 <- N_1 + N_2 -2
+p_val <- 2*pt(t_val, df_1_2, lower =FALSE)
+p_val
+```
+### P-value 4.143297e-10 (0.0000000004143297) , which is highly close to 0, strongly agaigst nill hypotheis, meaning there is statistically significant difference between two test group (promo 1 and promo 2). 
+```{r}
+options(scipen = 100)
+p_val
+```
+
+
+```{r}
+t_val2 <-(
+  mean_1 -mean_3
+)/sqrt(std_1**2/N_1 + std_3 **2 /N_3)
+```
+
+```{r}
+df_1_3 <- N_1 + N_3 -2
+p_val <- 2*pt(t_val2, df_1_3, lower =FALSE)
+p_val
+```
+#### when we calculate p- value with promo 1 and 3, p-value is 0.1  which is higher than 0.05, so there is no statistically significant difference between two test. 
+
+### Another way to do t test
+
+```{r}
+t.test(promo1, promo2)
+```
+
+
+```{r}
+t.test(promo1, promo3)
+
+```
+```{r}
+t.test(promo2, promo3)
+
+```
+
